@@ -47,6 +47,11 @@ pip install prelabel
 pip install "prelabel[ml]"
 ```
 
+**Install from GitHub repository
+```bash
+pip install git+https://github.com/droyed/prelabel.git
+```
+
 **With development tools**:
 ```bash
 pip install "prelabel[ml,dev]"
