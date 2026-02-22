@@ -42,14 +42,14 @@ Use only the Core layer if you have pre-built annotations and just need to manag
 pip install prelabel
 ```
 
-**With ML support** (YOLO/SAM bridge, pulls in PyTorch ~3–5 GB):
-```bash
-pip install "prelabel[ml]"
-```
-
 **Install from GitHub repository**
 ```bash
 pip install git+https://github.com/droyed/prelabel.git
+```
+
+**With ML support** (YOLO/SAM bridge, pulls in PyTorch ~3–5 GB):
+```bash
+pip install "prelabel[ml]"
 ```
 
 **With development tools**:
