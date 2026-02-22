@@ -6,6 +6,23 @@ __pycache__/
 # C extensions
 *.so
 
+# ML model weights & checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.tflite
+*.pb
+*.h5
+*.keras
+runs/
+checkpoints/
+wandb/
+mlruns/
+lightning_logs/
+
 # Distribution / packaging
 .Python
 build/

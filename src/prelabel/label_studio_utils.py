@@ -20,6 +20,35 @@ class LabelStudioClient:
             "Content-Type": "application/json"
         })
 
+    def project_exists(self, project_id, raise_on_missing=True):
+        """
+        Verifies if a specific project ID exists on the instance.
+        
+        Args:
+            project_id (int): The ID of the project to check.
+            raise_on_missing (bool): If True, raises a ValueError if not found. 
+                                     If False, simply returns False.
+                                     
+        Returns:
+            bool: True if the project exists, False otherwise.
+        """
+        url = f"{self.base_url}/api/projects/{project_id}/"
+        response = self.session.get(url)
+        
+        if response.status_code == 200:
+            return True
+        elif response.status_code == 404:
+            if raise_on_missing:
+                raise ValueError(
+                    f"❌ Error: Project ID {project_id} does not exist. "
+                    f"Please verify the ID or create a new project on {self.base_url} first."
+                )
+            return False
+            
+        # Catch any other unexpected API errors (like 401 Unauthorized)
+        response.raise_for_status()
+        return False
+            
     def delete_all_projects(self):
         """Deletes all projects currently hosted on the Label Studio instance."""
         response = self.session.get(f"{self.base_url}/api/projects/")
@@ -228,13 +257,16 @@ class LabelStudioClient:
                     
         print(f"\nCleanup complete. Removed {deleted_count} empty projects.")
         return deleted_titles
-    
+
 
     def import_preannotated_task(self, project_id, image_path, ls_predictions, model_version="yolo-model"):
         """
         Encodes an image to Base64 and pushes it along with its predictions 
         to Label Studio in a single API call.
         """
+        # 0. Fail-fast: Validates project existence (raises exception if missing)
+        self.project_exists(project_id, raise_on_missing=True)
+
         # 1. Convert the image to a Base64 Data URI
         try:
             with open(image_path, "rb") as f:
@@ -261,10 +293,8 @@ class LabelStudioClient:
             }
         ]
 
-
         # 3. Push it all at once to the Import endpoint
         import_url = f"{self.base_url}/api/projects/{project_id}/import"
-        
         response = self.session.post(import_url, json=payload)
         response.raise_for_status()
         
@@ -272,13 +302,13 @@ class LabelStudioClient:
         task_count = import_data.get('task_count', 0)
         
         if task_count == 0:
-            # If we get a 2xx response but 0 tasks were created, the payload structure was likely rejected
             raise ValueError(f"Import processed, but no tasks were created. Response: {import_data}")
             
         print(f"✅ Success! Task and predictions imported for {os.path.basename(image_path)}.")
         
-        # Because the JSON import endpoint doesn't return specific IDs, 
-        # returning the summary dictionary is the most useful response here.
+        project_url = f"{self.base_url}/projects/{project_id}/data"
+        print(f"🔗 View and verify your imported data here: {project_url}")
+        
         return import_data
 
 
