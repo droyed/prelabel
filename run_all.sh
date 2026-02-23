@@ -11,9 +11,13 @@ run() {
     echo "=========================================="
     echo " $label"
     echo "=========================================="
-    python "$@"
-    echo ""
-    echo "--- $label: DONE ---"
+    if python "$@"; then
+        echo ""
+        echo "--- $label: DONE ---"
+    else
+        echo ""
+        echo "--- $label: FAILED ---"
+    fi
 }
 
 run "Demo: basic_usage with YOLO"          demos/demo_det.py yolo
