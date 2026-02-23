@@ -57,7 +57,9 @@ ml = [
     "ultralytics>=8.0.0",
     "opencv-python>=4.5.0",
     "numpy>=1.24.0",
+    "pandas>=1.5.0",
     "label-studio-converter>=0.0.50",
+    "imtools @ git+https://github.com/droyed/imtools.git",
 ]
 
 # Development and testing tools.
