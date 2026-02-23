@@ -6,19 +6,20 @@ cd "$SCRIPT_DIR"
 
 run() {
     local label="$1"
-    local script="$2"
+    shift
     echo ""
     echo "=========================================="
     echo " $label"
     echo "=========================================="
-    python "$script"
+    python "$@"
     echo ""
     echo "--- $label: DONE ---"
 }
 
-run "Demo: basic_usage"           "demos/basic_usage.py"
-run "Demo: demo_LabelStudioClient" "demos/demo_LabelStudioClient.py"
-run "Tests: test_LabelStudioClient" "tests/test_LabelStudioClient.py"
+run "Demo: basic_usage with YOLO"          demos/demo_det.py yolo
+run "Demo: basic_usage with SAM3"          demos/demo_det.py sam3
+run "Demo: demo_LabelStudioClient"         demos/demo_LabelStudioClient.py
+run "Tests: test_LabelStudioClient"        tests/test_LabelStudioClient.py
 
 echo ""
 echo "=========================================="

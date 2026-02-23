@@ -5,14 +5,51 @@ import mimetypes
 import uuid
 import cv2
 import numpy as np
+import pandas as pd
 import sys
 from label_studio_converter.brush import mask2rle
+from typing import List, Tuple, Union, Dict, Any
+import imtools
 
+
+
+def generate_label_config(labels: list[dict], label_type: str = "BrushLabels") -> str:
+    """
+    Generates a Label Studio configuration string from a list of label dictionaries.
+    
+    Args:
+        labels: A list of dictionaries containing 'name' and 'color' keys.
+        label_type: The Label Studio tag to wrap the labels in (e.g., BrushLabels, PolygonLabels).
+        
+    Returns:
+        A formatted XML string representing the label configuration.
+    """
+    # 1. Generate the individual <Label .../> strings
+    label_tags = "".join([
+        f'<Label value="{label["name"]}" background="{label["color"]}"/>' 
+        for label in labels
+    ])
+    
+    # 2. Insert them into the main configuration template
+    label_config = f"""
+<View>
+  <Image name="image" value="$image" zoom="true"/>
+  <{label_type} name="tag" toName="image">
+    
+    
+  {label_tags}</{label_type}>
+</View>        
+"""
+    
+    # .strip() removes any accidental leading/trailing newlines
+    return label_config.strip() 
 
 
 class LabelStudioClient:
     def __init__(self, port, api_key):
         """Initializes the client and sets up a persistent request session."""
+        check_label_studio_running(port, raise_on_error=True)
+            
         self.base_url = f"http://localhost:{port}"
         self.session = requests.Session()
         self.session.headers.update({
@@ -86,6 +123,37 @@ class LabelStudioClient:
         response = self.session.post(f"{self.base_url}/api/projects/", json=payload)
         response.raise_for_status()
         return response.json()['id']
+    
+
+    def create_cv_project_BrushLabels(self, title, labels):
+        """
+        Creates a new computer vision project in Label Studio using BrushLabels.
+        
+        Args:
+            title (str): The title of the new project (e.g., 'New Project 1').
+            labels (list[dict]): A list of dictionaries representing labels, 
+                where each dictionary should have a 'name' and 'color' key.
+                Example:
+                [
+                    {'name': 'Person', 'color': '#FFA39E'},
+                    {'name': 'Car', 'color': '#D4380D'}
+                ]
+                
+        Returns:
+            int: The ID of the newly created project.
+        """
+        label_config = generate_label_config(labels, label_type="BrushLabels")
+        
+        payload = {
+            "title": title,
+            "label_config": label_config,
+        }
+        
+        response = self.session.post(f"{self.base_url}/api/projects/", json=payload)
+        response.raise_for_status()
+        return response.json()['id']    
+    
+    
 
     def import_local_images(self, project_id, image_directory):
         """Uploads local images to a project. Requires LOCAL_FILES_SERVING_ENABLED=true."""
@@ -227,6 +295,80 @@ class LabelStudioClient:
             
         print("=" * 90 + "\n")
     
+    def get_projects_summary(self) -> list[dict]:
+        """ Fetches all projects and returns a targeted summary of each matching the table format in a list of dictionaries. """
+        response = self.session.get(f"{self.base_url}/api/projects/")
+        response.raise_for_status()
+        
+        projects = response.json().get('results', [])
+        summary = []
+        
+        if not projects:
+            return summary
+            
+        for p in projects:
+            pid = p.get('id')
+            if pid is None:
+                continue
+                
+            title = p.get('title', 'Untitled')[:22] # truncate like the print function does
+            
+            # Dynamically extract the number of classes from the parsed XML config
+            num_classes = 0
+            config = p.get('parsed_label_config', {})
+            for key, value in config.items():
+                if isinstance(value, dict) and 'labels' in value:
+                    num_classes += len(value['labels'])
+                    
+            # Task and annotation metrics
+            total_tasks = p.get('task_number', 0)
+            annotated_tasks = p.get('num_tasks_with_annotations', 0)
+            total_annots = p.get('total_annotations_number', 0)
+            
+            # Calculate progress percentage safely
+            if total_tasks > 0:
+                progress_str = f"{(annotated_tasks / total_tasks) * 100:.1f}%"
+            else:
+                progress_str = "0.0%"
+                
+            # Slice the ISO datetime string to just get the YYYY-MM-DD
+            created_at = p.get('created_at', 'Unknown')[:10]
+            
+            summary.append({
+                "ID": pid,
+                "Title": title,
+                "Classes": num_classes,
+                "Tasks": total_tasks,
+                "Annotated": annotated_tasks,
+                "Progress": progress_str,
+                "Annots": total_annots,
+                "Created Date": created_at
+            })
+            
+        return summary
+
+    def setup_project_interactive(self, title, labels):
+        print('Project Summary:')
+        df = pd.DataFrame(self.get_projects_summary())
+        print(df)
+        
+        existing_ids = []
+        if not df.empty and 'ID' in df.columns:
+            existing_ids = df['ID'].astype(str).tolist()
+
+        while True:
+            user_input = input("Enter Project ID (leave blank to create a new one): ").strip()
+            
+            if not user_input:
+                proj_id = self.create_cv_project_BrushLabels(title=title, labels=labels)
+                print(f'✅ Success! Created project with ID: {proj_id}')
+                return proj_id
+            
+            if user_input in existing_ids:
+                return int(user_input)
+            else:
+                print(f"Invalid Project ID. Please enter one of {existing_ids} or leave blank.")
+
     def cleanup_empty_projects(self):
         """
         Iterates through all projects and deletes any that have exactly zero tasks.
@@ -264,7 +406,7 @@ class LabelStudioClient:
         Encodes an image to Base64 and pushes it along with its predictions 
         to Label Studio in a single API call.
         """
-        # 0. Fail-fast: Validates project existence (raises exception if missing)
+        # 0. Fail-fast: Validates project existence (raises exception if missing)        
         self.project_exists(project_id, raise_on_missing=True)
 
         # 1. Convert the image to a Base64 Data URI
@@ -295,6 +437,7 @@ class LabelStudioClient:
 
         # 3. Push it all at once to the Import endpoint
         import_url = f"{self.base_url}/api/projects/{project_id}/import"
+        
         response = self.session.post(import_url, json=payload)
         response.raise_for_status()
         
@@ -353,7 +496,8 @@ def extract_ls_predictions(yolo_result, task_type="segmentation", from_name="tag
         if conf < conf_threshold:
             continue
             
-        class_name = names[clss[i]].capitalize()
+        class_name = names[clss[i]]
+
         region_id = str(uuid.uuid4())[:8]
         
         # Base dictionary shared by all Label Studio prediction types
@@ -420,7 +564,7 @@ def extract_ls_predictions(yolo_result, task_type="segmentation", from_name="tag
     return prediction_results
 
 
-def check_label_studio_running(port, timeout=5):
+def check_label_studio_running(port, timeout=5, raise_on_error=False):
     """Check if Label Studio is running and accessible.
 
     Makes a GET request to the Label Studio health endpoint to verify
@@ -429,10 +573,14 @@ def check_label_studio_running(port, timeout=5):
     Args:
         port: The port number where Label Studio is running.
         timeout: Request timeout in seconds. Defaults to 5.
+        raise_on_error: If True, raises a ConnectionError instead of returning False.
 
     Returns:
         bool: True if Label Studio is running and responds with status 200,
-              False otherwise.
+              False otherwise (if raise_on_error is False).
+
+    Raises:
+        ConnectionError: If raise_on_error is True and Label Studio is not accessible.
 
     Prints:
         A status message indicating whether Label Studio is running,
@@ -443,12 +591,19 @@ def check_label_studio_running(port, timeout=5):
     try:
         response = requests.get(url, timeout=timeout)
         if response.status_code == 200:
-            print(f"✓ Label Studio is running on port {port}")
+            #print(f"✓ Label Studio is running on port {port}")
             return True
+        else:
+            error_msg = f"✗ Label Studio responded with status code {response.status_code} on port {port}"
     except requests.exceptions.ConnectionError:
-        print(f"✗ Label Studio is NOT running on port {port}. Please run: label-studio start --port {port}")
+        error_msg = f"✗ Label Studio is NOT running on port {port}. Please run: label-studio start --port {port}"
     except requests.exceptions.Timeout:
-        print(f"✗ Label Studio health check timed out on port {port}")
+        error_msg = f"✗ Label Studio health check timed out on port {port}"
+        
+    if raise_on_error:
+        raise ConnectionError(error_msg)
+    
+    print(error_msg)
     return False
 
 
@@ -486,6 +641,49 @@ def push_yolo_to_labelstudio(yolo_result, img_path, port, api_key, project_id, t
 
     # 2. Initialize client and push to Label Studio
     ls = LabelStudioClient(port, api_key)
-    import_summary = ls.import_preannotated_task(project_id, img_path, ls_predictions)
-    
+    import_summary = ls.import_preannotated_task(project_id, img_path, ls_predictions)    
     return import_summary
+
+def rgb_to_hex(rgb: Union[List[int], Tuple[int, int, int]]) -> str:
+    """
+    Convert an RGB color list or tuple to a hex string.
+    
+    Args:
+        rgb: A list or tuple of 3 integers representing Red, Green, and Blue components (0-255).
+        
+    Returns:
+        Hexadecimal color string (e.g., '#ff0000').
+    """
+    if len(rgb) != 3:
+        raise ValueError("Input must be a list or tuple of exactly 3 elements.")
+        
+    r, g, b = rgb
+    
+    # Clamp values between 0 and 255
+    r = max(0, min(255, r))
+    g = max(0, min(255, g))
+    b = max(0, min(255, b))
+    
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+def generate_yolo_labels(yolo_result: Any, class_names: Union[Dict[int, str], List[str]]) -> List[Dict[str, str]]:
+    """
+    Generate a list of YOLO labels (name and color) from an Ultralytics YOLO Results object.
+
+    Args:
+        yolo_result: An Ultralytics YOLO Results object.
+        class_names: A dictionary or list mapping class indices to class names.
+
+    Returns:
+        A list of dictionaries containing 'name' and 'color' (hex string) for each user-selected class.
+    """
+    idxs = np.unique(yolo_result.boxes.cls.cpu().numpy().astype(int)).tolist()
+    selected_class_names = [class_names[i] for i in idxs]
+    colors = imtools.viz.colors.generate_colors(len(selected_class_names), 'golden_ratio')
+
+    yolo_labels = []
+    for color, clsname in zip(colors, selected_class_names):
+        color_hex = rgb_to_hex(color)
+        yolo_labels.append({'name': clsname, 'color': color_hex})
+        
+    return yolo_labels
