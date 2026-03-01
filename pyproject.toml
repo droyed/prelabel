@@ -56,6 +56,7 @@ dependencies = [
 ml = [
     "ultralytics==8.3.237",
     "numpy>=1.24.0",
+    "ftfy>=6.1.1",
     "label-studio-converter>=0.0.50",
     "imtools @ git+https://github.com/droyed/imtools.git",
 ]
