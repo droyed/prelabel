@@ -67,6 +67,11 @@ dev = [
     "pytest-cov>=4.0.0",
 ]
 
+# Install everything.
+# pip install prelabel[all]
+all = [
+    "prelabel[ml,dev]",
+]
 
 # =============================================================================
 # HATCHLING BUILD CONFIGURATION
