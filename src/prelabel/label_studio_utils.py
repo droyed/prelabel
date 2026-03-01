@@ -3,14 +3,10 @@ import os
 import base64
 import mimetypes
 import uuid
-import cv2
 import numpy as np
-import pandas as pd
-import sys
 from label_studio_converter.brush import mask2rle
-from typing import List, Tuple, Union, Dict, Any
+from typing import List, Tuple, Union, Dict
 import imtools
-
 
 
 def generate_label_config(labels: list[dict], label_type: str = "BrushLabels") -> str:
@@ -123,9 +119,9 @@ class LabelStudioClient:
         response = self.session.post(f"{self.base_url}/api/projects/", json=payload)
         response.raise_for_status()
         return response.json()['id']
-    
 
-    def create_cv_project_BrushLabels(self, title, labels):
+
+    def create_cv_project_generic(self, title, labels, label_type):
         """
         Creates a new computer vision project in Label Studio using BrushLabels.
         
@@ -138,11 +134,13 @@ class LabelStudioClient:
                     {'name': 'Person', 'color': '#FFA39E'},
                     {'name': 'Car', 'color': '#D4380D'}
                 ]
+            label_type: str
+                Must be "BrushLabels" or "RectangleLabels"
                 
         Returns:
             int: The ID of the newly created project.
         """
-        label_config = generate_label_config(labels, label_type="BrushLabels")
+        label_config = generate_label_config(labels, label_type=label_type)
         
         payload = {
             "title": title,
@@ -151,8 +149,7 @@ class LabelStudioClient:
         
         response = self.session.post(f"{self.base_url}/api/projects/", json=payload)
         response.raise_for_status()
-        return response.json()['id']    
-    
+        return response.json()['id'] 
     
 
     def import_local_images(self, project_id, image_directory):
@@ -347,28 +344,6 @@ class LabelStudioClient:
             
         return summary
 
-    def setup_project_interactive(self, title, labels):
-        print('Project Summary:')
-        df = pd.DataFrame(self.get_projects_summary())
-        print(df)
-        
-        existing_ids = []
-        if not df.empty and 'ID' in df.columns:
-            existing_ids = df['ID'].astype(str).tolist()
-
-        while True:
-            user_input = input("Enter Project ID (leave blank to create a new one): ").strip()
-            
-            if not user_input:
-                proj_id = self.create_cv_project_BrushLabels(title=title, labels=labels)
-                print(f'✅ Success! Created project with ID: {proj_id}')
-                return proj_id
-            
-            if user_input in existing_ids:
-                return int(user_input)
-            else:
-                print(f"Invalid Project ID. Please enter one of {existing_ids} or leave blank.")
-
     def cleanup_empty_projects(self):
         """
         Iterates through all projects and deletes any that have exactly zero tasks.
@@ -455,113 +430,84 @@ class LabelStudioClient:
         return import_data
 
 
-def extract_ls_predictions(yolo_result, task_type="segmentation", from_name="tag", to_name="image", conf_threshold=0.0):
-    """
-    Converts a single YOLO Result object into a list of Label Studio prediction dictionaries.
-    
-    Args:
-        yolo_result: A single ultralytics.engine.results.Result object.
-        task_type (str): "segmentation" (outputs BrushLabels) or "detection" (outputs RectangleLabels).
-        from_name (str): The name of the labeling tag in your LS XML config.
-        to_name (str): The name of the object tag in your LS XML config.
-        conf_threshold (float): Minimum confidence score to include the prediction.
+    def import_preannotated_tasks_batch(self, project_id, batch_data, model_version="yolo-model", batch_size=25):
+        """
+        Encodes multiple images to Base64 and pushes them along with their predictions 
+        to Label Studio in batches to avoid payload size limits.
         
-    Returns:
-        list: A list of dictionaries formatted for Label Studio regions.
-    """
-    orig_height, orig_width = yolo_result.orig_shape
-    names = yolo_result.names
-    prediction_results = []
-    
-    # Check if the model detected anything
-    if not hasattr(yolo_result, 'boxes') or yolo_result.boxes is None:
-        return prediction_results
-        
-    boxes = yolo_result.boxes
-    confs = boxes.conf.cpu().numpy()
-    clss = boxes.cls.int().cpu().numpy()
-    
-    # Pre-fetch masks if segmentation is requested
-    if task_type == "segmentation":
-        if not hasattr(yolo_result, 'masks') or yolo_result.masks is None:
-            print("Warning: task_type is 'segmentation' but no masks found in YOLO result.")
-            masks = []
-        else:
-            masks = yolo_result.masks.data.cpu().numpy()
+        Args:
+            project_id (int/str): The Label Studio project ID.
+            batch_data (list of dict): Expected format: [{'image_path': str, 'predictions': list}]
+            model_version (str): Name/version of the model.
+            batch_size (int): How many images to send per API call.
             
-    for i in range(len(boxes)):
-        conf = float(confs[i])
-        
-        # Filter out low-confidence predictions
-        if conf < conf_threshold:
-            continue
-            
-        class_name = names[clss[i]]
+        Returns:
+            int: Total number of tasks successfully created.
+        """
+        # 0. Fail-fast: Validates project existence        
+        self.project_exists(project_id, raise_on_missing=True)
 
-        region_id = str(uuid.uuid4())[:8]
+        import_url = f"{self.base_url}/api/projects/{project_id}/import"
+        total_tasks_created = 0
         
-        # Base dictionary shared by all Label Studio prediction types
-        base_region = {
-            "id": region_id,
-            "origin": "manual",
-            "to_name": to_name,
-            "from_name": from_name,
-            "image_rotation": 0,
-            "original_width": orig_width,
-            "original_height": orig_height,
-            "score": conf,
-            "meta": {
-                "text": [f"Conf: {conf:.2%}"]
-            }
-        }
-        
-        # Handle Masks (BrushLabels via RLE)
-        if task_type == "segmentation":
-            mask = masks[i]
+        # Process in chunks to avoid massive JSON payloads
+        for i in range(0, len(batch_data), batch_size):
+            chunk = batch_data[i:i + batch_size]
+            payload = []
             
-            # Convert to uint8 if not already            
-            if mask.dtype == np.bool_:
-                mask = mask.astype(np.uint8)
+            # 1 & 2. Convert images and build payload for this chunk
+            for task_info in chunk:
+                image_path = task_info['image_path']
+                ls_predictions = task_info['predictions']
                 
-            assert mask.dtype == np.uint8
+                try:
+                    with open(image_path, "rb") as f:
+                        img_b64 = base64.b64encode(f.read()).decode('utf-8')
+                except FileNotFoundError:
+                    print(f"⚠️ Warning: Image not found at {image_path}. Skipping this image.")
+                    continue
+                    
+                mime_type, _ = mimetypes.guess_type(image_path)
+                mime_type = mime_type or "image/png" 
+                image_data_uri = f"data:{mime_type};base64,{img_b64}"
+
+                payload.append({
+                    "data": {
+                        "image": image_data_uri  # Maps to <Image value="$image"/>
+                    },
+                    "predictions": [
+                        {
+                            "model_version": model_version,
+                            "result": ls_predictions
+                        }
+                    ]
+                })
+
+            if not payload:
+                continue
+
+            # 3. Push the chunk to the Import endpoint
+            response = self.session.post(import_url, json=payload)
+            response.raise_for_status()
             
-            # Resize and threshold
-            mask_resized = cv2.resize(mask, (orig_width, orig_height), interpolation=cv2.INTER_NEAREST)
-            mask_uint8 = (mask_resized > 0.5).astype(np.uint8) * 255
+            import_data = response.json()
+            tasks_in_chunk = import_data.get('task_count', 0)
+            total_tasks_created += tasks_in_chunk
             
-            seg_region = base_region.copy()
-            seg_region.update({
-                "type": "brushlabels",
-                "value": {
-                    "format": "rle",
-                    "rle": mask2rle(mask_uint8),
-                    "brushlabels": [class_name]
-                }
-            })
-            prediction_results.append(seg_region)
+            print(f"🔄 Uploaded batch {i // batch_size + 1}... ({tasks_in_chunk} tasks created)")
+
+        if total_tasks_created == 0:
+            raise ValueError("Import processed, but no tasks were created. Check your data format.")
             
-        # Handle Bounding Boxes (RectangleLabels)
-        elif task_type == "detection":
-            # YOLO normalized xyxy: [x_min, y_min, x_max, y_max] from 0.0 to 1.0
-            box_n = boxes.xyxyn[i].cpu().numpy() 
-            x_min, y_min, x_max, y_max = box_n
-            
-            det_region = base_region.copy()
-            det_region.update({
-                "type": "rectanglelabels",
-                "value": {
-                    # Label Studio expects bounding boxes as percentages (0-100)
-                    "x": float(x_min * 100),
-                    "y": float(y_min * 100),
-                    "width": float((x_max - x_min) * 100),
-                    "height": float((y_max - y_min) * 100),
-                    "rotation": 0,
-                    "rectanglelabels": [class_name]
-                }
-            })
-            prediction_results.append(det_region)
-            
-    return prediction_results
+        print(f"✅ Success! A total of {total_tasks_created} tasks and predictions were imported.")
+        
+        project_url = f"{self.base_url}/projects/{project_id}/data"
+        print(f"🔗 View and verify your imported data here: {project_url}")
+        
+        return total_tasks_created
+    
+    
+from ultralytics.utils.ops import scale_masks
 
 
 def check_label_studio_running(port, timeout=5, raise_on_error=False):
@@ -607,43 +553,6 @@ def check_label_studio_running(port, timeout=5, raise_on_error=False):
     return False
 
 
-def push_yolo_to_labelstudio(yolo_result, img_path, port, api_key, project_id, task_type="segmentation", conf_threshold=0.5):
-    """
-    Extracts predictions from a YOLO result object and pushes them along 
-    with the source image to a Label Studio project.
-    
-    Args:
-        yolo_result: A single result object from a YOLO model (e.g., results[0]).
-        img_path (str): Local path to the image file.
-        port (int): The Label Studio instance port.
-        api_key (str): Your Label Studio API token.
-        project_id (int): The destination project ID.
-        task_type (str): "segmentation" or "detection".
-        conf_threshold (float): Minimum confidence threshold for predictions.
-        
-    Returns:
-        dict: The summary dictionary returned by the Label Studio import endpoint.
-    """
-    # Guard at the top of your Step 2 script
-    if not check_label_studio_running(port=port):
-        sys.exit(1)
-    
-    print(f"Processing YOLO results for {os.path.basename(img_path)}...")
-    
-    # 1. Extract the prediction regions
-    ls_predictions = extract_ls_predictions(
-        yolo_result=yolo_result,
-        task_type=task_type,
-        conf_threshold=conf_threshold
-    )
-
-    print(f"Extracted {len(ls_predictions)} regions. Pushing to API...")
-
-    # 2. Initialize client and push to Label Studio
-    ls = LabelStudioClient(port, api_key)
-    import_summary = ls.import_preannotated_task(project_id, img_path, ls_predictions)    
-    return import_summary
-
 def rgb_to_hex(rgb: Union[List[int], Tuple[int, int, int]]) -> str:
     """
     Convert an RGB color list or tuple to a hex string.
@@ -666,24 +575,139 @@ def rgb_to_hex(rgb: Union[List[int], Tuple[int, int, int]]) -> str:
     
     return f"#{r:02x}{g:02x}{b:02x}"
 
-def generate_yolo_labels(yolo_result: Any, class_names: Union[Dict[int, str], List[str]]) -> List[Dict[str, str]]:
+
+def generate_yolo_labels_from_classnames(class_names: Union[Dict[int, str], List[str]]) -> List[Dict[str, str]]:
     """
     Generate a list of YOLO labels (name and color) from an Ultralytics YOLO Results object.
 
     Args:
-        yolo_result: An Ultralytics YOLO Results object.
         class_names: A dictionary or list mapping class indices to class names.
 
     Returns:
         A list of dictionaries containing 'name' and 'color' (hex string) for each user-selected class.
-    """
-    idxs = np.unique(yolo_result.boxes.cls.cpu().numpy().astype(int)).tolist()
-    selected_class_names = [class_names[i] for i in idxs]
-    colors = imtools.viz.colors.generate_colors(len(selected_class_names), 'golden_ratio')
+    """    
+    colors = imtools.viz.colors.generate_colors(len(class_names), 'golden_ratio')
 
     yolo_labels = []
-    for color, clsname in zip(colors, selected_class_names):
+    for color, clsname in zip(colors, class_names):
         color_hex = rgb_to_hex(color)
         yolo_labels.append({'name': clsname, 'color': color_hex})
         
     return yolo_labels
+
+
+def _validate_and_filter(yolo_result, conf_threshold):
+    """
+    Validates a YOLO result and returns filtered detections.
+    Returns None if nothing valid is found.
+    """
+    if not hasattr(yolo_result, 'boxes') or yolo_result.boxes is None:
+        return None
+
+    boxes = yolo_result.boxes
+    all_confs = boxes.conf.cpu().numpy()
+    all_clss = boxes.cls.int().cpu().numpy()
+    validmask = all_confs >= conf_threshold
+
+    if not validmask.any():
+        return None
+
+    return validmask, all_confs[validmask], all_clss[validmask]
+
+
+def _make_base_region(region_id, conf, orig_width, orig_height, from_name, to_name):
+    """Builds the base Label Studio region dict shared by all task types."""
+    return {
+        "id": region_id,
+        "origin": "manual",
+        "to_name": to_name,
+        "from_name": from_name,
+        "image_rotation": 0,
+        "original_width": orig_width,
+        "original_height": orig_height,
+        "score": conf,
+        "meta": {"text": [f"Conf: {conf:.2%}"]},
+    }
+
+def extract_ls_bbox_predictions(yolo_result, from_name="tag", to_name="image", conf_threshold=0.0):
+    """Converts YOLO results to Label Studio rectanglelabels predictions."""
+    orig_height, orig_width = yolo_result.orig_shape
+    names = yolo_result.names
+
+    filtered = _validate_and_filter(yolo_result, conf_threshold)
+    if filtered is None:
+        return [], set()
+
+    validmask, confs, clss = filtered
+    boxes_n = yolo_result.boxes.xyxyn.cpu().numpy()[validmask]
+
+    results = []
+    class_names = set()
+    for i, (conf, cls) in enumerate(zip(confs, clss)):
+        conf = float(conf)
+        class_name = names[cls]
+        class_names.add(class_name)
+        x_min, y_min, x_max, y_max = boxes_n[i]
+
+        region = _make_base_region(str(uuid.uuid4())[:8], conf, orig_width, orig_height, from_name, to_name)
+        region.update({
+            "type": "rectanglelabels",
+            "value": {
+                "x": float(x_min * 100),
+                "y": float(y_min * 100),
+                "width": float((x_max - x_min) * 100),
+                "height": float((y_max - y_min) * 100),
+                "rotation": 0,
+                "rectanglelabels": [class_name],
+            },
+        })
+        results.append(region)
+    return results, class_names
+
+
+def extract_ls_segmentation_predictions(yolo_result, from_name="tag", to_name="image", conf_threshold=0.0):
+    """Converts YOLO results to Label Studio brushlabels predictions."""
+    orig_height, orig_width = yolo_result.orig_shape
+    names = yolo_result.names
+
+    filtered = _validate_and_filter(yolo_result, conf_threshold)
+    if filtered is None:
+        return [], set()
+
+    validmask, confs, clss = filtered
+
+    masks_4d = yolo_result.masks.data[validmask].unsqueeze(1)
+    scaled_masks = scale_masks(masks_4d, (orig_height, orig_width)).squeeze(1)
+    scaled_masks_uint8 = (scaled_masks.cpu().numpy() > 0.5) * np.uint8(255)
+
+    results = []
+    class_names = set()
+    for i, (conf, cls) in enumerate(zip(confs, clss)):
+        conf = float(conf)
+        class_name = names[cls]
+        class_names.add(class_name)
+
+        region = _make_base_region(str(uuid.uuid4())[:8], conf, orig_width, orig_height, from_name, to_name)
+        region.update({
+            "type": "brushlabels",
+            "value": {
+                "format": "rle",
+                "rle": mask2rle(scaled_masks_uint8[i]),
+                "brushlabels": [class_name],
+            },
+        })
+        results.append(region)
+    return results, class_names
+
+
+def extract_ls_predictions(yolo_result, task_type="bbox", **kwargs):
+    """Unified entry point that dispatches to the appropriate extractor."""
+    extractors = {
+        "bbox": extract_ls_bbox_predictions,
+        "segmentation": extract_ls_segmentation_predictions,
+    }
+    if task_type not in extractors:
+        raise ValueError(f"Unknown task_type '{task_type}'. Choose from: {list(extractors.keys())}")
+    return extractors[task_type](yolo_result, **kwargs)
+
+

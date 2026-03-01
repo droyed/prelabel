@@ -8,12 +8,12 @@ ML layer (requires [ml] extras: ultralytics, opencv-python, numpy, label-studio-
     from prelabel.label_studio_utils import push_yolo_to_labelstudio
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
-from prelabel.label_studio_utils import LabelStudioClient
+from .label_studio_utils import LabelStudioClient
+from .adapters import setup_project_with_yolo_results
 
 __all__ = [
     "LabelStudioClient",
-    "push_yolo_to_labelstudio",
-    "__version__",
+    "setup_project_with_yolo_results",
 ]

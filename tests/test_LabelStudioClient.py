@@ -2,9 +2,6 @@ import os
 import tempfile
 import shutil
 import requests
-
-
-# Adjust this import based on your actual module structure
 from prelabel import LabelStudioClient
 
 # --- Test Configuration ---
@@ -98,6 +95,46 @@ def test_project_summary(client):
         success = False
     assert success, "list_projects_summary threw an error."
 
+def test_get_projects_summary(client):
+    print("Testing get_projects_summary return value...")
+    # Create a known project so there's at least one result
+    test_id = client.create_bbox_project("Summary Test Project", ["ClassA"])
+    try:
+        summary = client.get_projects_summary()
+        assert isinstance(summary, list), "Expected a list"
+        assert len(summary) > 0, "Expected at least one entry"
+
+        expected_keys = {"ID", "Title", "Classes", "Tasks", "Annotated", "Progress", "Annots", "Created Date"}
+        for entry in summary:
+            assert expected_keys == set(entry.keys()), f"Unexpected keys: {set(entry.keys())}"
+
+        ids = [e["ID"] for e in summary]
+        assert test_id in ids, f"Newly created project {test_id} not found in summary"
+    finally:
+        client.session.delete(f"{client.base_url}/api/projects/{test_id}/")
+    print("  get_projects_summary: PASS")
+
+def test_delete_all_projects(client):
+    """
+    ⚠️  DESTRUCTIVE — wipes ALL projects on the instance.
+    Intentionally excluded from run_all_ls_tests().
+    """
+    print("Testing delete_all_projects...")
+    # Create a couple of disposable projects
+    ids = [
+        client.create_bbox_project("Del Test A", ["X"]),
+        client.create_bbox_project("Del Test B", ["Y"]),
+    ]
+    count_before = len(client.get_projects_summary())
+    assert count_before >= 2, "Precondition: at least 2 projects should exist"
+
+    deleted = client.delete_all_projects()
+    assert deleted == count_before, f"Expected {count_before} deleted, got {deleted}"
+
+    remaining = client.get_projects_summary()
+    assert remaining == [], f"Expected empty list after delete_all, got {remaining}"
+    print("  delete_all_projects: PASS")
+
 def test_cleanup_empty_projects(client):
     print("Testing empty project cleanup...")
     # Create a dummy empty project to ensure it gets deleted
@@ -135,6 +172,7 @@ def run_all_ls_tests():
         
         # 4. Summary & Utilities
         test_project_summary(client)
+        test_get_projects_summary(client)
         test_cleanup_empty_projects(client)
         
         print("\n✅ All standard client tests passed successfully.")

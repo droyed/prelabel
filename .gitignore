@@ -17,6 +17,7 @@ __pycache__/
 *.pb
 *.h5
 *.keras
+bpe_simple_vocab_16e6.txt.gz
 runs/
 checkpoints/
 wandb/

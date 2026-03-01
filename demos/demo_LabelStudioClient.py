@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+
 # 1. Setup: Generate dummy images for the demo
 temp_dir = tempfile.mkdtemp()
 dummy_img_path = os.path.join(temp_dir, "demo_image.png")

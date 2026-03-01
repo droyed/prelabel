@@ -19,7 +19,7 @@ build-backend = "hatchling.build"
 # -----------------------------------------------------------------------------
 [project]
 name = "prelabel"
-version = "0.1.0"
+version = "1.0.0"
 description = "Toolkit for bridging YOLO/SAM model predictions with Label Studio annotation workflows."
 readme = "README.md"
 license = { text = "MIT" }
@@ -55,9 +55,7 @@ dependencies = [
 # pip install prelabel[ml]
 ml = [
     "ultralytics>=8.0.0",
-    "opencv-python>=4.5.0",
     "numpy>=1.24.0",
-    "pandas>=1.5.0",
     "label-studio-converter>=0.0.50",
     "imtools @ git+https://github.com/droyed/imtools.git",
 ]
@@ -73,6 +71,9 @@ dev = [
 # =============================================================================
 # HATCHLING BUILD CONFIGURATION
 # =============================================================================
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 # Explicit src-layout package declaration.
