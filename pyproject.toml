@@ -54,7 +54,7 @@ dependencies = [
 # Full YOLO/SAM-to-Label-Studio bridge (includes PyTorch via ultralytics, ~3-5 GB).
 # pip install prelabel[ml]
 ml = [
-    "ultralytics>=8.0.0",
+    "ultralytics==8.3.237",
     "numpy>=1.24.0",
     "label-studio-converter>=0.0.50",
     "imtools @ git+https://github.com/droyed/imtools.git",
