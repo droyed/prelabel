@@ -42,7 +42,7 @@ client = LabelStudioClient(port=8080, api_key="your-token")
   [{"name": "Person", "color": "#FFA39E"}, {"name": "Car", "color": "#D4380D"}]
   ```
 - `label_type`: must be `"BrushLabels"` or `"RectangleLabels"`
-- The generated label config uses `name="tag"` — used by `setup_project_with_yolo_results`
+- The generated label config uses `name="tag"` — used by `yolo_to_labelstudio`
 - Returns the new project's integer ID
 
 **`project_exists`**
@@ -155,12 +155,12 @@ import_local_images(project_id: int, image_directory: str) -> int
 
 ---
 
-## `setup_project_with_yolo_results`
+## `yolo_to_labelstudio`
 
 ```python
-from prelabel import setup_project_with_yolo_results
+from prelabel import yolo_to_labelstudio
 
-proj_id = setup_project_with_yolo_results(
+proj_id = yolo_to_labelstudio(
     results,                                          # list[ultralytics.engine.results.Results]
     task_type="segmentation",                         # str
     projectID=None,                                   # int | None
@@ -333,7 +333,7 @@ rgb_to_hex(rgb: list[int] | tuple[int, int, int]) -> str
     "type": "rectanglelabels",
     "from_name": "label",       # str — must match label config name= attribute
                                 #   "label" for bbox/polygon projects
-                                #   "tag" for brush projects and setup_project_with_yolo_results
+                                #   "tag" for brush projects and yolo_to_labelstudio
     "to_name": "image",         # str — matches <Image name="image"/>
     "image_rotation": 0,
     "original_width": 1280,     # int — source image width in pixels
@@ -383,4 +383,4 @@ The `from_name` field in each region dict must exactly match the `name` attribut
 | `create_polygon_project` | `"label"` | `"label"` |
 | `create_brush_project` | `"label"` | `"label"` |
 | `create_cv_project_generic` | `"tag"` | `"tag"` |
-| `setup_project_with_yolo_results` | `"tag"` (via `create_cv_project_generic`) | `"tag"` (extractor default) |
+| `yolo_to_labelstudio` | `"tag"` (via `create_cv_project_generic`) | `"tag"` (extractor default) |

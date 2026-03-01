@@ -11,9 +11,9 @@ ML layer (requires [ml] extras: ultralytics, opencv-python, numpy, label-studio-
 __version__ = "1.0.0"
 
 from .label_studio_utils import LabelStudioClient
-from .adapters import setup_project_with_yolo_results
+from .adapters import yolo_to_labelstudio
 
 __all__ = [
     "LabelStudioClient",
-    "setup_project_with_yolo_results",
+    "yolo_to_labelstudio",
 ]

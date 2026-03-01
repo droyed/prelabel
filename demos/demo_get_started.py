@@ -2,7 +2,7 @@ import os
 import sys
 from ultralytics import YOLO
 import glob
-from prelabel.adapters import setup_project_with_yolo_results
+from prelabel.adapters import yolo_to_labelstudio
 
 model = YOLO("yolov8n-seg.pt")
 
@@ -11,8 +11,8 @@ imgsdir = "assets/images_YOLO"
 # Load all images in the directory using glob with extension .jpg or .png
 imgs = glob.glob(os.path.join(imgsdir, "*.jpg")) + glob.glob(os.path.join(imgsdir, "*.png"))
 results = model.predict(source=imgs, conf=0.3, verbose=False)
-proj_id = setup_project_with_yolo_results(results, task_type="segmentation", project_title="Seg Project")
-proj_id = setup_project_with_yolo_results(results, task_type="bbox", project_title="Bbox Project")
+proj_id = yolo_to_labelstudio(results, task_type="segmentation", project_title="Seg Project")
+proj_id = yolo_to_labelstudio(results, task_type="bbox", project_title="Bbox Project")
 
 #--------------------------------------------------------------
 IMGPATH = 'assets/images_YOLO/person_337.png'
@@ -30,4 +30,4 @@ predictor = SAM3SemanticPredictor(overrides=dict(conf=0.5, task="segment", mode=
 predictor.set_image(IMGPATH)
 class_names = SAM3_CLASS_NAMES
 results = predictor(text=class_names)
-proj_id = setup_project_with_yolo_results(results, task_type="segmentation", project_title="Seg Project - SAM3")
+proj_id = yolo_to_labelstudio(results, task_type="segmentation", project_title="Seg Project - SAM3")

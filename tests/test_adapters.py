@@ -3,7 +3,7 @@ import glob
 from pathlib import Path
 from ultralytics import YOLO
 
-from prelabel import LabelStudioClient, setup_project_with_yolo_results
+from prelabel import LabelStudioClient, yolo_to_labelstudio
 
 LS_PORT = int(os.getenv("LS_TEST_PORT", 8080))
 API_KEY = os.getenv("LS_TEST_API_KEY", os.getenv("LABELSTUDIO_TOKEN"))
@@ -16,7 +16,7 @@ IMAGE_DIR  = _PROJ_ROOT / "assets/images_YOLO"
 
 def test_seg_new_project(client, results_seg):
     print("Testing seg new project creation via adapter...")
-    proj_id = setup_project_with_yolo_results(
+    proj_id = yolo_to_labelstudio(
         results_seg,
         task_type="segmentation",
         projectID=None,
@@ -33,7 +33,7 @@ def test_seg_new_project(client, results_seg):
 
 def test_bbox_new_project(client, results_bbox):
     print("Testing bbox new project creation via adapter...")
-    proj_id = setup_project_with_yolo_results(
+    proj_id = yolo_to_labelstudio(
         results_bbox,
         task_type="bbox",
         projectID=None,
@@ -50,7 +50,7 @@ def test_seg_existing_project(client, results_seg):
     print("Testing seg import into existing project...")
     existing_id = client.create_brush_project("Test-Adapter-Seg-Existing", ["person", "car"])
     assert existing_id > 0
-    returned_id = setup_project_with_yolo_results(
+    returned_id = yolo_to_labelstudio(
         results_seg,
         task_type="segmentation",
         projectID=existing_id,
@@ -65,7 +65,7 @@ def test_bbox_existing_project(client, results_bbox):
     print("Testing bbox import into existing project...")
     existing_id = client.create_bbox_project("Test-Adapter-Bbox-Existing", ["person", "car"])
     assert existing_id > 0
-    returned_id = setup_project_with_yolo_results(
+    returned_id = yolo_to_labelstudio(
         results_bbox,
         task_type="bbox",
         projectID=existing_id,
@@ -83,7 +83,7 @@ def test_conf_threshold_filtering(client, results_seg):
     are created (with no pre-annotations) and total_tasks_created > 0.
     """
     print("Testing conf_threshold=0.999 (extreme filtering)...")
-    proj_id = setup_project_with_yolo_results(
+    proj_id = yolo_to_labelstudio(
         results_seg,
         task_type="segmentation",
         projectID=None,
@@ -101,7 +101,7 @@ def test_invalid_task_type(results_seg):
     print("Testing ValueError for invalid task_type...")
     raised = False
     try:
-        setup_project_with_yolo_results(results_seg, task_type="invalid")
+        yolo_to_labelstudio(results_seg, task_type="invalid")
     except ValueError as exc:
         raised = True
         assert "invalid" in str(exc).lower() or "task_type" in str(exc).lower(), \
@@ -123,7 +123,7 @@ def test_skips_results_without_masks(client, results_bbox_no_masks):
     print("Testing ValueError when all results lack masks (seg task on masked-out results)...")
     raised = False
     try:
-        setup_project_with_yolo_results(
+        yolo_to_labelstudio(
             results_bbox_no_masks,
             task_type="segmentation",
             projectID=None,

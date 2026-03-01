@@ -32,7 +32,7 @@ ML layer (+ultralytics, numpy, label-studio-converter)
   ├── extract_ls_bbox_predictions    ← YOLO boxes → rectanglelabels
   ├── extract_ls_segmentation_predictions  ← YOLO masks → brushlabels (RLE)
   ├── generate_yolo_labels_from_classnames ← class names → label dicts with colors
-  └── setup_project_with_yolo_results      ← high-level YOLO→LS adapter
+  └── yolo_to_labelstudio      ← high-level YOLO→LS adapter
 ```
 
 ## Installation
@@ -60,12 +60,12 @@ export LABELSTUDIO_TOKEN="your-token-here"
 
 ```python
 from ultralytics import YOLO
-from prelabel import setup_project_with_yolo_results
+from prelabel import yolo_to_labelstudio
 
 model = YOLO("yolov8n-seg.pt")
 results = model.predict(source=["image1.jpg", "image2.jpg"])
 
-setup_project_with_yolo_results(results, task_type="segmentation", project_title="SegProj")
+yolo_to_labelstudio(results, task_type="segmentation", project_title="SegProj")
 ```
 
 ## Workflows
@@ -96,7 +96,7 @@ return values, exceptions raised, and HTTP endpoints used.
 ```
 ├── pyproject.toml              # Build config, dependencies, optional extras
 ├── src/prelabel/
-│   ├── __init__.py             # Public API: LabelStudioClient, setup_project_with_yolo_results
+│   ├── __init__.py             # Public API: LabelStudioClient, yolo_to_labelstudio
 │   ├── label_studio_utils.py   # LabelStudioClient, prediction extractors, utilities
 │   └── adapters.py             # High-level YOLO→Label Studio adapter
 ├── demos/

@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [1.0.0] - 2026-03-01
 
 ### Added
-- **`src/prelabel/adapters.py`**: New adapter module with `setup_project_with_yolo_results()` — high-level function that accepts YOLO/SAM Results, auto-generates label colors, creates or reuses a Label Studio project, and batch-imports predictions. Supports `"segmentation"` and `"bbox"` task types.
+- **`src/prelabel/adapters.py`**: New adapter module with `yolo_to_labelstudio()` — high-level function that accepts YOLO/SAM Results, auto-generates label colors, creates or reuses a Label Studio project, and batch-imports predictions. Supports `"segmentation"` and `"bbox"` task types.
 - **`LabelStudioClient.create_cv_project_generic()`**: Creates a project with a configurable control type (`BrushLabels`, `RectangleLabels`, `PolygonLabels`, etc.).
 - **`LabelStudioClient.create_brush_project()`**: Convenience wrapper around `create_cv_project_generic` for BrushLabels projects.
 - **`LabelStudioClient.get_projects_summary()`**: Returns a structured list of dicts with project metadata (ID, title, classes, tasks, progress, etc.).
@@ -24,14 +24,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`label_studio_utils._make_base_region()`**: Internal helper to build the shared base dict for any region type.
 - **`API_Reference.md`**: Comprehensive API reference documenting all public methods, parameters, return types, and prediction format schemas.
 - **`Makefile`**: Build automation with `test`, `demo`, `clean`, and `help` targets; replaces `run_all.sh`.
-- **`demos/demo_get_started.py`**: New end-to-end getting-started demo covering YOLO segmentation, bounding-box, and SAM3 semantic segmentation workflows using the new `setup_project_with_yolo_results` adapter.
+- **`demos/demo_get_started.py`**: New end-to-end getting-started demo covering YOLO segmentation, bounding-box, and SAM3 semantic segmentation workflows using the new `yolo_to_labelstudio` adapter.
 - **`tests/test_adapters.py`**: Test suite for the adapter layer, covering new-project and existing-project creation for both `segmentation` and `bbox` modes, confidence-threshold filtering, invalid task-type errors, and results-without-masks skipping.
 - **`tests/test_LabelStudioClient.py`**: Added `test_get_projects_summary()` test; added brush project type to `test_project_creation()`; improved PNG export test to handle 500 response gracefully.
 - **`pyproject.toml`**: Added optional dependency groups `ml` (ultralytics, numpy, label-studio-converter, imtools) and `dev` (pytest, pytest-cov); added wheel exclude rules for assets, models, and test data; added hatchling `allow-direct-references` for imtools GitHub source; added pytest and coverage config.
 
 ### Changed
 - **Version**: Bumped to `1.0.0` in `pyproject.toml` and `src/prelabel/__init__.py`.
-- **`src/prelabel/__init__.py`**: Public API now explicitly exports `LabelStudioClient` and `setup_project_with_yolo_results`; sets `__version__ = "1.0.0"`.
+- **`src/prelabel/__init__.py`**: Public API now explicitly exports `LabelStudioClient` and `yolo_to_labelstudio`; sets `__version__ = "1.0.0"`.
 - **`LabelStudioClient.__init__`**: Now calls `check_label_studio_running(port, raise_on_error=True)` on startup — fails fast with `ConnectionError` if Label Studio is not reachable.
 - **`check_label_studio_running()`**: Added `raise_on_error` parameter; when `True`, raises `ConnectionError` instead of returning `False`.
 - **`demos/demo_LabelStudioClient.py`**: Refactored to demonstrate two canonical workflows — AI-assisted bounding-box annotation (with pre-annotations) and bulk data ingestion/maintenance (with COCO export and project cleanup).

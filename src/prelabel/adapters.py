@@ -5,7 +5,7 @@ from prelabel.label_studio_utils import (
     extract_ls_predictions,
 )
 
-def setup_project_with_yolo_results(
+def yolo_to_labelstudio(
     results,
     task_type="segmentation",
     projectID=None,
@@ -47,7 +47,7 @@ def setup_project_with_yolo_results(
         # 1. Segmentation Task (New Project)
         >>> model = YOLO("yolov8n-seg.pt")
         >>> results = model.predict(source=imgs, conf=0.3)
-        >>> proj_id = setup_project_with_yolo_results(
+        >>> proj_id = yolo_to_labelstudio(
         ...     results,
         ...     task_type="segmentation",
         ...     project_title="Seg Project"
@@ -56,7 +56,7 @@ def setup_project_with_yolo_results(
         # 2. Bounding Box Task (Existing Project ID 10)
         >>> model = YOLO("yolov8n.pt") # or seg model
         >>> results = model.predict(source=imgs, conf=0.5)
-        >>> proj_id = setup_project_with_yolo_results(
+        >>> proj_id = yolo_to_labelstudio(
         ...     results,
         ...     task_type="bbox",
         ...     projectID=10
