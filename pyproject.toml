@@ -43,17 +43,7 @@ requires-python = ">=3.10"
 # Lightweight — does NOT pull in PyTorch or OpenCV.
 dependencies = [
     "requests>=2.28.0",
-]
-
-
-# -----------------------------------------------------------------------------
-# OPTIONAL DEPENDENCY GROUPS
-# -----------------------------------------------------------------------------
-[project.optional-dependencies]
-
-# Full YOLO/SAM-to-Label-Studio bridge (includes PyTorch via ultralytics, ~3-5 GB).
-# pip install prelabel[ml]
-ml = [
+    "label-studio==1.22.0",
     "ultralytics==8.3.237",
     "numpy>=1.24.0",
     "ftfy>=6.1.1",
@@ -63,8 +53,13 @@ ml = [
     "imtools @ git+https://github.com/droyed/imtools.git",
 ]
 
+# -----------------------------------------------------------------------------
+# OPTIONAL DEPENDENCY GROUPS
+# -----------------------------------------------------------------------------
+[project.optional-dependencies]
+
 # Development and testing tools.
-# pip install prelabel[ml,dev]
+# pip install prelabel[dev]
 dev = [
     "pytest>=9.0.0",
     "pytest-cov>=4.0.0",
@@ -73,7 +68,7 @@ dev = [
 # Install everything.
 # pip install prelabel[all]
 all = [
-    "prelabel[ml,dev]",
+    "prelabel[dev]",
 ]
 
 # =============================================================================

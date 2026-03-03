@@ -39,12 +39,9 @@ ML layer (+ultralytics, numpy, label-studio-converter)
 
 ```bash
 git clone <repo-url> && cd <repo-dir>
-pip install .[ml]          # standard (ML support)
-pip install -e .[ml,dev]   # editable + dev tools
+pip install -e .[dev]   # editable + dev tools
 pip install .              # core only (no ultralytics/numpy)
 ```
-
-> **Note:** `[ml]` installs `imtools` from GitHub — ensure `git` is available.
 
 ## Setup
 
