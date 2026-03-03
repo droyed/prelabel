@@ -40,6 +40,7 @@ ML layer (+ultralytics, numpy, label-studio-converter)
 ```bash
 git clone <repo-url> && cd <repo-dir>
 pip install -e .[dev]   # editable + dev tools
+pip install -e .[all]   # editable + all test/dev packages
 pip install .              # core only (no ultralytics/numpy)
 ```
 
