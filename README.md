@@ -112,6 +112,11 @@ return values, exceptions raised, and HTTP endpoints used.
 make test demo
 ```
 
+## 🎬 Demo
+
+- [▶ How to use the codebase](https://github.com/droyed/prelabel/releases/download/v1.0.0/HowToUse.mp4)
+- [▶ Use case walkthrough](https://github.com/droyed/prelabel/releases/download/v1.0.0/UseCase1.mp4)
+
 ---
 
 ## Attributions
