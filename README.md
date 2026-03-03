@@ -123,6 +123,8 @@ make test demo
 
 Test images located at `assets/images_YOLO` are from the [COCO val2017 dataset](https://cocodataset.org/) (Lin et al., 2015), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
+Demo Video Assets - The image used for demo is from https://ddot.dc.gov/page/pedestrian-program.
+
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup
